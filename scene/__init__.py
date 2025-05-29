@@ -60,9 +60,11 @@ class Scene:
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
             scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval, args.n_views, rand_pcd=args.rand_pcd)
+        elif args.source_path.find('Transient') != -1:
+            print("############ load Transient ############")
+            scene_info = sceneLoadTypeCallbacks["Transient"](args.source_path, white_background=False, rand_pcd=args.rand_pcd)
         else:
             assert False, "Could not recognize scene type!"
-
 
         if not self.loaded_iter:
             with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
@@ -100,13 +102,16 @@ class Scene:
                 pseudo_poses = generate_random_poses_360(self.train_cameras[resolution_scale])
             elif args.source_path.find('DTU') != -1:
                 pseudo_poses = generate_random_poses_llff(self.train_cameras[resolution_scale])
+            elif args.source_path.find('Transient') != -1:
+                pseudo_poses = generate_random_poses_360(self.train_cameras[resolution_scale])
 
             view = self.train_cameras[resolution_scale][0]
             self.bounds = view.bounds
             for pose in pseudo_poses:
                 pseudo_cams.append(PseudoCamera(
                     R=pose[:3, :3].T, T=pose[:3, 3], FoVx=view.FoVx, FoVy=view.FoVy,
-                    width=view.image_width, height=view.image_height
+                    width=view.image_width, height=view.image_height,
+                    cx=view.cx, cy=view.cy,
                 ))
             self.pseudo_cameras[resolution_scale] = pseudo_cams
 

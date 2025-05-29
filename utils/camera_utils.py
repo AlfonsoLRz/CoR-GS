@@ -44,16 +44,17 @@ def loadCam(args, id, cam_info, resolution_scale):
     mask = None if cam_info.mask is None else cv2.resize(cam_info.mask, resolution)
     gt_image = resized_image_rgb[:3, ...]
     loaded_mask = None
-
     depth = None
 
     if resized_image_rgb.shape[1] == 4:
         loaded_mask = resized_image_rgb[3:4, ...]
 
     return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
-                  FoVx=cam_info.FovX, FoVy=cam_info.FovY,  image=gt_image, gt_alpha_mask=loaded_mask,
+                  FoVx=cam_info.FovX, FoVy=cam_info.FovY, image=gt_image, gt_alpha_mask=loaded_mask,
                   uid=id, data_device=args.data_device, image_name=cam_info.image_name,
-                  depth_image=depth, mask=mask, bounds=cam_info.bounds, focalx=cam_info.focalx, focaly=cam_info.focaly, width=cam_info.width, height=cam_info.height)
+                  depth_image=depth, mask=mask, bounds=cam_info.bounds, focalx=cam_info.focalx, focaly=cam_info.focaly,
+                  width=cam_info.width, height=cam_info.height,
+                  cx=cam_info.cx, cy=cam_info.cy,)
 
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):

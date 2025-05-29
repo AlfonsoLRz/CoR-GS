@@ -48,14 +48,14 @@ def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     Rt = np.linalg.inv(C2W)
     return np.float32(Rt)
 
-def getProjectionMatrix(znear, zfar, fovX, fovY):
+def getProjectionMatrix(znear, zfar, fovX, fovY, cx, cy):
     tanHalfFovY = math.tan((fovY / 2))
     tanHalfFovX = math.tan((fovX / 2))
 
     top = tanHalfFovY * znear
-    bottom = -top
+    bottom = top
     right = tanHalfFovX * znear
-    left = -right
+    left = right
     z_sign = 1.0
 
     # P = torch.zeros(4, 4)
@@ -67,11 +67,25 @@ def getProjectionMatrix(znear, zfar, fovX, fovY):
     # P[2, 2] = z_sign * zfar / (zfar - znear)
     # P[2, 3] = -(zfar * znear) / (zfar - znear)
 
-    P = torch.zeros([4, 4])
-    P[0, 0] = 1.0 / tanHalfFovX
-    P[1, 1] = 1.0 / tanHalfFovY
+    # P = torch.zeros([4, 4])
+    # P[0, 0] = -1.0 / tanHalfFovX
+    # P[1, 1] = -1.0 / tanHalfFovY
+    # P[2, 2] = 1.0
+    # P[3, 2] = 1.0
+
+    W, H = 512, 512  # Assuming a fixed resolution for the projection matrix
+    fx = fov2focal(fovX, W)
+    fy = fov2focal(fovY, H)
+
+    #print(fovX, fovY, fx, fy, cx, cy)
+    P = torch.zeros(4, 4)
+    P[0, 0] = 2 * fx / W
+    P[0, 2] = 2 * (cx + 2) / W - 1  # principal point X
+    P[1, 1] = -2 * fy / H
+    P[1, 2] = 1 - 2 * cy / H  # principal point Y (also flipped)
     P[2, 2] = 1.0
     P[3, 2] = 1.0
+
     return P
 
 

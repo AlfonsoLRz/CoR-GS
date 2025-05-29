@@ -1,8 +1,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
-
 *.pyc
 .vscode
 output*
@@ -11,9 +9,7 @@ diff_rasterization/diff_rast.egg-info
 diff_rasterization/dist
 tensorboard_3d
 screenshots
-
-
 data*
-
-
 run_scripts*
+.idea*
+submodules*

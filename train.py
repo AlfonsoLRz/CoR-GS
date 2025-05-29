@@ -56,7 +56,7 @@ def seed_everything(seed):
 
 
 def training(dataset, opt, pipe, args):
-    # implenmetation of more than 2 3d gaussian radiance fields currently is not supported in this code
+    # implementation of more than 2 3d gaussian radiance fields currently is not supported in this code
     assert args.gaussiansN >= 1 and args.gaussiansN <=2 
     testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from = args.test_iterations, \
             args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from
@@ -127,6 +127,7 @@ def training(dataset, opt, pipe, args):
 
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         gt_image = viewpoint_cam.original_image.cuda()
+        bg_mask = viewpoint_cam.bg_mask.cuda() if viewpoint_cam.bg_mask is not None else None
 
         if 'DTU' in scene.source_path:
             if 'scan110' not in scene.source_path:
@@ -137,8 +138,6 @@ def training(dataset, opt, pipe, args):
             for i in range(1, 50):
                 bg_mask[:, i:] *= bg_mask_clone[:, :-i]
             gt_image[bg_mask.repeat(3,1,1)] = 0.
-        else:
-            bg_mask = None
 
         RenderDict = {}
         LossDict = {}
@@ -199,6 +198,9 @@ def training(dataset, opt, pipe, args):
                 render_results = render(eval_cam, GsDict[f'gs0'], pipe, bg)
                 image = torch.clamp(render_results["render"], 0.0, 1.0)
                 gt_image = torch.clamp(eval_cam.original_image.to("cuda"), 0.0, 1.0)
+                bg_mask = eval_cam.bg_mask.to("cuda") if eval_cam.bg_mask is not None else None
+                if bg_mask is not None:
+                    bg_mask = bg_mask.repeat(3, 1, 1)
                 black = torch.zeros_like(gt_image).to(gt_image.device)
                 render_depth = render_results["depth"]
                 render_depth_image = depth2image(render_depth, inverse=True, rgb=True)
@@ -211,7 +213,7 @@ def training(dataset, opt, pipe, args):
                     render_depth_image_gs1 = depth2image(render_depth_gs1, inverse=True, rgb=True)
                     render_opacity_image_gs1 = render_results_gs1["alpha"].repeat(3, 1, 1)
 
-            row0 = torch.cat([gt_image, black, black], dim=2)
+            row0 = torch.cat([gt_image, bg_mask if bg_mask is not None else black, black], dim=2)
             row1 = torch.cat([image, render_depth_image, render_opacity_image], dim=2)
             if args.gaussiansN > 1:
                 row2 = torch.cat([image_gs1, render_depth_image_gs1, render_opacity_image_gs1], dim=2)
@@ -223,6 +225,10 @@ def training(dataset, opt, pipe, args):
             
             os.makedirs(f"{dataset.model_path}/log_images_train", exist_ok = True)
             torchvision.utils.save_image(image_to_show, f"{dataset.model_path}/log_images_train/{iteration}.jpg")
+            torchvision.utils.save_image(gt_image, f"{dataset.model_path}/log_images_train/{iteration}_gt.jpg")
+            torchvision.utils.save_image(image, f"{dataset.model_path}/log_images_train/{iteration}_render.jpg")
+            # if bg_mask is not None:
+            #     torchvision.utils.save_image(bg_mask.float(), f"{dataset.model_path}/log_images_train/{iteration}_bg_mask.jpg")
 
         with torch.no_grad():
             # Progress bar
@@ -366,9 +372,6 @@ def training_report(args, tb_writer, iteration, loss, l1_loss, testing_iteration
                         render_depth_image_gs1 = depth2image(render_depth_gs1, inverse=True, rgb=depth_rgb)
                         render_opacity_image_gs1 = render_results_gs1["alpha"].repeat(3, 1, 1)
 
-                               
-
-
                     if tb_writer and (idx < 8):
                         row0 = torch.cat([gt_image, black, black], dim=2)
                         row1 = torch.cat([render_image, render_depth_image, render_opacity_image], dim=2)
@@ -432,7 +435,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--configs", type=str, default = "")
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[500, 2000, 3000, 5000, 7000, 10000, 15000, 30000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[10000, 30000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[3000, 10000, 30000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[10_000])
     parser.add_argument("--start_checkpoint", type=str, default = None)
@@ -447,7 +450,7 @@ if __name__ == "__main__":
     parser.add_argument("--coprune", action='store_true', default=False)
     parser.add_argument('--coprune_threshold', type=int, default=5)
 
-    parser.add_argument("--save_log_images", action="store_true")
+    parser.add_argument("--save_log_images", action="store_true", default=False)
 
     # parser.add_argument("--absdensify", action="store_true")
 

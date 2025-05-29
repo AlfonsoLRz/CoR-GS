@@ -4,7 +4,7 @@ workspace=$3
 
 
 python train.py \
---source_path data/DTU/Rectified/$scan -m $workspace \
+--source_path data/dtu_corgs/$scan -m $workspace \
 --eval  -r 4 --n_views 3 \
 --random_background \
 --iterations 10000 --position_lr_max_steps 10000 \

@@ -1,0 +1,1 @@
+C:\SIBR\bin\SIBR_gaussianViewer_app.exe --model-path C:\Github\CoR-GS\output\Transient\cinema_512\
