@@ -180,9 +180,9 @@ def training(dataset, opt, pipe, args):
         for i in range(args.gaussiansN):
             if bg_mask is not None and iteration >= args.use_mask_from_iter:
                 LossDict[f"loss_gs{i}"] = loss_photometric(RenderDict[f"image_gs{i}"], gt_image, opt=opt, valid=(~bg_mask).float())
-                # alpha_penalty = torch.exp(RenderDict[f"alpha_gs{i}"][bg_mask]) - 1
-                # LossDict[f"loss_gs{i}"] += alpha_penalty.mean() * 5.0
-                LossDict[f"loss_gs{i}"] += (RenderDict[f"alpha_gs{i}"][bg_mask] ** 2).mean()
+                alpha_penalty = torch.exp(RenderDict[f"alpha_gs{i}"][bg_mask]) - 1
+                LossDict[f"loss_gs{i}"] += alpha_penalty.mean() * 2.0
+                #LossDict[f"loss_gs{i}"] += (RenderDict[f"alpha_gs{i}"][bg_mask] ** 2).mean()
             else:
                 LossDict[f"loss_gs{i}"] = loss_photometric(RenderDict[f"image_gs{i}"], gt_image, opt=opt)
 

@@ -583,36 +583,6 @@ class GaussianModel:
         valid_points_mask = torch.logical_and(torch.logical_and(x >= 0, x < 512), torch.logical_and(y >= 0, y < 512))
         bg_point_mask = bg_mask[0, y, x]
         valid_points_mask = torch.logical_and(valid_points_mask, ~bg_point_mask)
-        valid_points_mask = valid_points_mask.cpu().numpy()
-
-        x = x.cpu().numpy()
-        y = y.cpu().numpy()
-
-        debug_image = np.zeros(shape=(512, 512), dtype=np.uint8)
-        for idx, (x_, y_) in enumerate(zip(x, y)):
-            if 0 <= x_ < 512 and 0 <= y_ < 512:
-                debug_image[y_, x_] = 255
-
-        # save debug image
-        from PIL import Image
-        im = Image.fromarray(debug_image)
-        im.save(f'debug_{iter}.png')
-
-        debug_image = np.zeros(shape=(512, 512), dtype=np.uint8)
-        for idx, (x_, y_) in enumerate(zip(x, y)):
-            if 0 <= x_ < 512 and 0 <= y_ < 512 and valid_points_mask[idx]:
-                debug_image[y_, x_] = 255
-
-        im = Image.fromarray(debug_image)
-        im.save(f'debug_{iter}_masked.png')
-
-        print(bg_mask.shape, bg_mask.dtype)
-        mask = bg_mask[0, :, :].cpu().numpy()
-        print(mask.shape, mask.dtype)
-        print(np.max(mask))
-        im = Image.fromarray(mask).convert("L")
-        im.save(f'debug_mask_{iter}.png')
-
         optimizable_tensors = self._prune_optimizer(valid_points_mask)
 
         self._xyz = optimizable_tensors["xyz"]
