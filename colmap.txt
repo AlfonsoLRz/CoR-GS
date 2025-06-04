@@ -1,0 +1,7 @@
+colmap feature_extractor --database_path output/cinema/database.db --image_path output/cinema --ImageReader.single_camera 1 --ImageReader.camera_model OPENCV --ImageReader.camera_params 627.2807863770092,628.2167773996763,128.0,128.0,0,0,0,0
+
+colmap exhaustive_matcher --database_path output/cinema/database.db 
+
+colmap mapper --database_path output/cinema/database.db --image_path output/cinema/images --output_path output/cinema/sparse
+
+colmap model_converter --input_path output/cinema/sparse/0 --output_path output/cinema/sparse/0 --output_type TXT

@@ -79,7 +79,7 @@ class PseudoCamera(nn.Module):
         self.image_width = width
         self.image_height = height
 
-        self.zfar = 100.0
+        self.zfar = 300.0
         self.znear = 0.01
 
         self.trans = trans

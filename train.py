@@ -95,6 +95,27 @@ def training(dataset, opt, pipe, args):
 
     ema_loss_for_log = 0.0
     first_iter += 1
+
+    viewpoint_cam = allCameras.pop(randint(0, len(allCameras)-1))
+    xyz = GsDict['gs0'].get_xyz
+    ones = torch.ones((xyz.shape[0], 1), device=xyz.device, dtype=xyz.dtype)
+    homography_points = torch.cat([xyz, ones], dim=1)  # Now [N, 4]
+    xyz = homography_points @ viewpoint_cam.full_proj_transform
+    ndc = xyz[:, :3] / xyz[:, 3:4]  # [-1, 1]
+
+    x = torch.round(((ndc[:, 0] + 1) * 0.5 * 511)).int()
+    y = torch.round(((ndc[:, 1] + 1) * 0.5 * 511)).int()
+    x = torch.clamp(x, 0, 512)
+    y = torch.clamp(y, 0, 512)
+
+    debug_image = np.zeros(shape=(512, 512), dtype=np.uint8)
+    for x_, y_ in zip(x, y):
+        debug_image[y_, x_] = 255
+
+    # save debug image
+    from PIL import Image
+    im = Image.fromarray(debug_image)
+    im.save("debug.png")
     
     for iteration in range(first_iter, opt.iterations + 1):
         if network_gui.conn == None:
@@ -157,9 +178,11 @@ def training(dataset, opt, pipe, args):
 
         # Loss
         for i in range(args.gaussiansN):
-            if not bg_mask is None:
+            if bg_mask is not None and iteration >= args.use_mask_from_iter:
                 LossDict[f"loss_gs{i}"] = loss_photometric(RenderDict[f"image_gs{i}"], gt_image, opt=opt, valid=(~bg_mask).float())
-                LossDict[f"loss_gs{i}"] += (RenderDict[f"alpha_gs{i}"][bg_mask]**2).mean()
+                # alpha_penalty = torch.exp(RenderDict[f"alpha_gs{i}"][bg_mask]) - 1
+                # LossDict[f"loss_gs{i}"] += alpha_penalty.mean() * 5.0
+                LossDict[f"loss_gs{i}"] += (RenderDict[f"alpha_gs{i}"][bg_mask] ** 2).mean()
             else:
                 LossDict[f"loss_gs{i}"] = loss_photometric(RenderDict[f"image_gs{i}"], gt_image, opt=opt)
 
@@ -183,9 +206,6 @@ def training(dataset, opt, pipe, args):
                             for j in range(args.gaussiansN):
                                 if i != j:
                                     LossDict[f"loss_gs{i}"] += loss_photometric(RenderDict[f"image_pseudo_co_gs{i}"], RenderDict[f"image_pseudo_co_gs{j}"].clone().detach(), opt=opt) / (args.gaussiansN - 1)
-
-            
-
 
         loss = LossDict["loss_gs0"]
         for i in range(args.gaussiansN):
@@ -255,7 +275,7 @@ def training(dataset, opt, pipe, args):
                            scene.model_path + "/chkpnt" + str(iteration) + ".pth")
 
             # Densification
-            if  iteration < opt.densify_until_iter:
+            if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
                 for i in range(args.gaussiansN):
                     viewspace_point_tensor = RenderDict[f"viewspace_point_tensor_gs{i}"]
@@ -270,7 +290,6 @@ def training(dataset, opt, pipe, args):
                     # size_threshold = 20 if iteration > opt.opacity_reset_interval else None
 
                     for i in range(args.gaussiansN):
-
                         GsDict[f"gs{i}"].densify_and_prune(opt.densify_grad_threshold, opt.prune_threshold, scene.cameras_extent, size_threshold, iteration)                              
 
             # Optimizer step
@@ -286,7 +305,14 @@ def training(dataset, opt, pipe, args):
                 # if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     print(f"reset opacity of gaussians-{i} at iteration {iteration}")
                     GsDict[f"gs{i}"].reset_opacity()
-                    
+
+            # Prune splats outside mask
+            if iteration > opt.use_mask_from_iter and iteration % opt.prune_splats_outside_mask_interval == 0 and bg_mask is not None:
+                for i in range(args.gaussiansN):
+                    bg_mask = viewpoint_cam.bg_mask.cuda() if viewpoint_cam.bg_mask is not None else None
+                    if bg_mask is not None:
+                        GsDict[f"gs{i}"].prune_from_bg_mask(bg_mask, viewpoint_cam, iteration)
+
             if args.coprune and iteration > opt.densify_from_iter and iteration % 500 == 0:
                 for i in range(args.gaussiansN):
                     for j in range(args.gaussiansN):
@@ -303,6 +329,7 @@ def training(dataset, opt, pipe, args):
                             mask_consistent[correspondence[:, 0], :] = 1
                             GsDict[f"indice_consistent_gs{i}to{j}"] = correspondence
                             GsDict[f"mask_inconsistent_gs{i}"] = ~(mask_consistent.bool())
+                            print(mask_consistent.shape)
                 for i in range(args.gaussiansN):
                     GsDict[f"gs{i}"].prune_from_mask(GsDict[f"mask_inconsistent_gs{i}"].squeeze(), iter=iteration)
                     
@@ -435,7 +462,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--configs", type=str, default = "")
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[500, 2000, 3000, 5000, 7000, 10000, 15000, 30000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[3000, 10000, 30000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[3000, 8000, 10000, 20000, 30000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[10_000])
     parser.add_argument("--start_checkpoint", type=str, default = None)

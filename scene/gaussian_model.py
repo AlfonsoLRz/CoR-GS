@@ -571,6 +571,81 @@ class GaussianModel:
     def prune_from_mask(self, prune_mask, iter):
         self.prune_points(prune_mask, iter)
 
+    def prune_from_bg_mask(self, bg_mask, viewpoint_cam, iter):
+        ones = torch.ones((self.get_xyz.shape[0], 1), device=self.get_xyz.device, dtype=self.get_xyz.dtype)
+        homography_points = torch.cat([self.get_xyz, ones], dim=1)  # Now [N, 4]
+        xyz = homography_points @ viewpoint_cam.full_proj_transform
+        ndc = xyz[:, :3] / xyz[:, 3:4]  # [-1, 1]
+
+        x = ((ndc[:, 0] + 1) * 0.5 * 511).round().long()
+        y = ((ndc[:, 1] + 1) * 0.5 * 511).round().long()
+
+        valid_points_mask = torch.logical_and(torch.logical_and(x >= 0, x < 512), torch.logical_and(y >= 0, y < 512))
+        bg_point_mask = bg_mask[0, y, x]
+        valid_points_mask = torch.logical_and(valid_points_mask, ~bg_point_mask)
+        valid_points_mask = valid_points_mask.cpu().numpy()
+
+        x = x.cpu().numpy()
+        y = y.cpu().numpy()
+
+        debug_image = np.zeros(shape=(512, 512), dtype=np.uint8)
+        for idx, (x_, y_) in enumerate(zip(x, y)):
+            if 0 <= x_ < 512 and 0 <= y_ < 512:
+                debug_image[y_, x_] = 255
+
+        # save debug image
+        from PIL import Image
+        im = Image.fromarray(debug_image)
+        im.save(f'debug_{iter}.png')
+
+        debug_image = np.zeros(shape=(512, 512), dtype=np.uint8)
+        for idx, (x_, y_) in enumerate(zip(x, y)):
+            if 0 <= x_ < 512 and 0 <= y_ < 512 and valid_points_mask[idx]:
+                debug_image[y_, x_] = 255
+
+        im = Image.fromarray(debug_image)
+        im.save(f'debug_{iter}_masked.png')
+
+        print(bg_mask.shape, bg_mask.dtype)
+        mask = bg_mask[0, :, :].cpu().numpy()
+        print(mask.shape, mask.dtype)
+        print(np.max(mask))
+        im = Image.fromarray(mask).convert("L")
+        im.save(f'debug_mask_{iter}.png')
+
+        optimizable_tensors = self._prune_optimizer(valid_points_mask)
+
+        self._xyz = optimizable_tensors["xyz"]
+        self._features_dc = optimizable_tensors["f_dc"]
+        self._features_rest = optimizable_tensors["f_rest"]
+        self._opacity = optimizable_tensors["opacity"]
+        self._scaling = optimizable_tensors["scaling"]
+        self._rotation = optimizable_tensors["rotation"]
+
+        self.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
+        self.xyz_gradient_accum_abs = self.xyz_gradient_accum_abs[valid_points_mask]
+        self.xyz_gradient_accum_abs_max = self.xyz_gradient_accum_abs_max[valid_points_mask]
+
+        self.denom = self.denom[valid_points_mask]
+        self.max_radii2D = self.max_radii2D[valid_points_mask]
+        self.confidence = self.confidence[valid_points_mask]
+
+        # x = torch.round(x).int()
+        # y = torch.round(y).int()
+        # x = torch.clamp(x, 0, 512)
+        # y = torch.clamp(y, 0, 512)
+
+        # debug_image = np.zeros(shape=(512, 512), dtype=np.uint8)
+        # for x_, y_ in zip(x, y):
+        #     debug_image[y_, x_] = 255
+        #
+        # # save debug image
+        # from PIL import Image
+        # im = Image.fromarray(debug_image)
+        # im.save("debug.png")
+        #
+        # self.prune_points(prune_mask, iter)
+
     def reset_opacity_from_mask(self, mask):
         valid_points_mask = ~mask
         opacities_new = inverse_sigmoid(torch.min(self.get_opacity, torch.ones_like(self.get_opacity) * 0.05))

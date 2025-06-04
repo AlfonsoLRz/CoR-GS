@@ -589,6 +589,7 @@ def readTransientCamerasFromTransforms(path, transforms_file, white_background):
             width = image.size[0]
 
             mask = norm_data[:, :, 3:4]
+            #mask = norm_data[:, :, 3:4]
             depth_image = None
 
             image = Image.fromarray(np.array(arr * 255.0, dtype=np.byte), "RGB")
@@ -609,12 +610,16 @@ def readTransientInfo(path, white_background, rand_pcd=True):
     ply_path = os.path.join(path, "point_cloud.ply")
 
     if rand_pcd:
+        pcd = fetchPly(ply_path)
+        points = pcd.points
+        aabb = np.array([points.min(0), points.max(0)])
+
         print('Random point cloud initialization.')
         num_pts = 10_000
         print(f"Generating random point cloud ({num_pts})...")
 
         # We create random points inside the bounds of the synthetic Blender scenes
-        xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
+        xyz = np.random.random((num_pts, 3)) * (aabb[1] - aabb[0]) + aabb[0]
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
 
